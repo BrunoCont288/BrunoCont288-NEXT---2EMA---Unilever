@@ -17,7 +17,7 @@ import time
 PORTA_SERIAL_REAL = 'COM6' 
 
 # 2. EDITE AQUI (se necessário): Verifique o baud rate do seu firmware G-code.
-BAUD_RATE_REAL = 115200
+BAUD_RATE_REAL = 250000
 
 controlador_real = None # Inicializa a variável para a conexão
 try:
