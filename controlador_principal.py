@@ -49,7 +49,7 @@ except serial.SerialException as e:
 if controlador_real and controlador_real.is_open:
     try:
         # Comando G-code de teste da Etapa 2
-        comando_gcode = "G0 X10 Y10 Z50\n"
+        comando_gcode = "M119\n"
 
         print("[CONTROLADOR REAL] Enviando comando de teste: {}".format(comando_gcode.strip()))
         
