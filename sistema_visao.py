@@ -1,15 +1,12 @@
 import cv2
 import numpy as np
 
-# Preparado para a câmera externa. Se não funcionar, tente o índice 2.
-# Lembre-se de conectar a câmera antes de rodar o script.
 cap = cv2.VideoCapture(1)
 
 if not cap.isOpened():
-    print("Erro: Não foi possível abrir a câmera. Verifique se ela está conectada e se o índice (1, 2...) está correto.")
+    print("Erro: Não foi possível abrir a câmera...")
     exit()
 
-# Dicionário com os intervalos de cor em HSV.
 intervalos = {
     'vermelho': [np.array([0, 120, 70]), np.array([10, 255, 255])],
     'verde':    [np.array([36, 100, 100]), np.array([86, 255, 255])],
@@ -43,17 +40,13 @@ while True:
         x, y, w, h = cv2.boundingRect(melhor_contorno)
         
         cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
-        cv2.putText(frame, cor_detectada.upper(), (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 0), 2)
+        cv2.putText(frame, cor_detectada.upper(), (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 0, 255), 2)
         
-        centro_x = x + w // 2
-        centro_y = y + h // 2
+        # --- MUDANÇA PRINCIPAL AQUI ---
+        # A saída de dados agora é apenas a cor, como o projeto precisa.
+        print(f"Cor detectada: {cor_detectada.upper()}")
 
-        cv2.circle(frame, (centro_x, centro_y), 5, (0, 0, 255), -1)
-
-        # Esta linha é a saída de dados da Etapa 1
-        print(f"Objeto: {cor_detectada.upper()} | Coordenadas do Centro (X, Y): ({centro_x}, {centro_y})")
-
-    cv2.imshow('Etapa 1 - Sistema de Visao (Aperte Q para sair)', frame)
+    cv2.imshow('Sistema de Visao Simplificado (Aperte Q para sair)', frame)
 
     if cv2.waitKey(1) & 0xFF == ord('q'):
         break
