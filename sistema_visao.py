@@ -40,7 +40,7 @@ while True:
         x, y, w, h = cv2.boundingRect(melhor_contorno)
         
         cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
-        cv2.putText(frame, cor_detectada.upper(), (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 0, 255), 2)
+        #cv2.putText(frame, cor_detectada.upper(), (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 0, 255), 2)
         
         # --- MUDANÇA PRINCIPAL AQUI ---
         # A saída de dados agora é apenas a cor, como o projeto precisa.
