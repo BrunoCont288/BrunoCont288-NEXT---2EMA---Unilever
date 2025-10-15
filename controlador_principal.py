@@ -1,74 +1,97 @@
-# Nome do Arquivo: controlador_principal_REAL.py
-# Versão: Compatível (sem f-strings, sem emojis)
-# Função: Script final do projeto. Controla o braço robótico físico.
-#         Nesta fase, ele é usado para testar a comunicação básica (Etapa 2).
-
-import serial # A biblioteca para conversar com o hardware real via USB
+import serial
 import time
+import cv2
+import numpy as np # Necessário para o OpenCV funcionar corretamente
+import sistema_visao
+import rotinas_gcode
 
-# Futuramente, os imports do OpenCV e NumPy virão aqui, após resolvermos os erros.
-# import cv2
-# import numpy as np
+# --- GERENCIADOR DE ESTADO E LÓGICA ---
+alturas_das_pilhas = [0.0] * 9
+ALTURAS_CAIXAS = {'vermelho': 8.0, 'verde': 10.0, 'azul': 12.0}
+def encontrar_pilha_mais_baixa(alturas):
+    return alturas.index(min(alturas))
+def enviar_sequencia(controlador, sequencia):
+    print("--- Iniciando Sequencia de Movimento ---")
+    for comando in sequencia:
+        if not comando: 
+            continue
+        print("Enviando: {}".format(comando))
+        controlador.write(comando.encode('utf-8') + b'\n')
+        while True:
+            resposta = controlador.readline().decode('utf-8').strip()
+            if 'ok' in resposta:
+                break
+    print("--- Sequencia Concluida ---")
 
-# --- BLOCO DE COMUNICAÇÃO REAL ---
-# Esta é a parte que o torna o código "físico".
-
-# 1. EDITE AQUI: Substitua 'COM3' pela porta serial real do seu robô.
-PORTA_SERIAL_REAL = 'COM6' 
-
-# 2. EDITE AQUI (se necessário): Verifique o baud rate do seu firmware G-code.
-BAUD_RATE_REAL = 250000
-
-controlador_real = None # Inicializa a variável para a conexão
+# --- BLOCO PRINCIPAL DE EXECUÇÃO ---
+controlador_real = None
+cap = None
 try:
-    print("[CONTROLADOR REAL] Tentando se conectar ao Robo FISICO em {}".format(PORTA_SERIAL_REAL))
-    
-    # Conecta-se à porta serial do hardware.
-    controlador_real = serial.Serial(PORTA_SERIAL_REAL, BAUD_RATE_REAL, timeout=1)
-    
-    # Espera 1-2 segundos para o firmware do robô (GRBL, etc.) inicializar.
+    # --- CONEXÃO COM O ROBÔ ---
+    PORTA_SERIAL = 'COM6' 
+    BAUD_RATE = 250000
+    print("Conectando ao Robô em {}...".format(PORTA_SERIAL))
+    controlador_real = serial.Serial(PORTA_SERIAL, BAUD_RATE, timeout=2)
     time.sleep(2)
-    print("[CONTROLADOR REAL] Conectado com sucesso ao Robo FISICO!")
-
-    # Limpa qualquer "lixo" de texto que possa estar na porta serial antes de começar.
     controlador_real.flushInput()
+    print("Robô conectado com sucesso!")
 
-except serial.SerialException as e:
-    print("ERRO FATAL: Nao foi possivel conectar ao robo fisico.")
-    print("   Detalhes: {}".format(e))
-    print("   VERIFIQUE: O robo esta conectado? A porta '{}' esta correta? Nenhum outro programa a esta usando?".format(PORTA_SERIAL_REAL))
-    exit() # Para o programa se não conseguir conectar.
+    # --- INICIALIZAÇÃO DA CÂMERA ---
+    CAMERA_INDEX = 1
+    cap = cv2.VideoCapture(CAMERA_INDEX)
+    if not cap.isOpened():
+        raise IOError("Nao foi possivel abrir a camera.")
+    print("Câmera iniciada. Sistema em operacao.")
 
-# --- FIM DO BLOCO DE COMUNICAÇÃO ---
+    enviar_sequencia(controlador_real, rotinas_gcode.criar_rotina_ir_para_repouso())
 
+    # --- LOOP DE OPERAÇÃO CONTÍNUA ---
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            print("Alerta: Nao foi possivel capturar o frame.")
+            continue
 
-# --- INÍCIO DA LÓGICA PRINCIPAL DO PROJETO ---
-# Esta seção irá crescer à medida que adicionamos as próximas etapas.
-# Por enquanto, ela apenas testa a conexão.
+        cor_detectada, bbox = sistema_visao.detectar_maior_objeto_por_cor(frame)
 
-if controlador_real and controlador_real.is_open:
-    try:
-        # Comando G-code de teste da Etapa 2
-        comando_gcode = "M119\n"
+        if cor_detectada:
+            print("\n!!! OBJETO DETECTADO: {} !!!".format(cor_detectada.upper()))
+            
+            print("--> Acionando rotina para PEGAR.")
+            enviar_sequencia(controlador_real, rotinas_gcode.criar_rotina_pegar())
 
-        print("[CONTROLADOR REAL] Enviando comando de teste: {}".format(comando_gcode.strip()))
+            indice_pilha = encontrar_pilha_mais_baixa(alturas_das_pilhas)
+            altura_atual = alturas_das_pilhas[indice_pilha]
+            print("--> Decisao: Colocar na pilha #{} (altura atual: {}mm)".format(indice_pilha, altura_atual))
+
+            sequencia_soltar = rotinas_gcode.criar_rotina_soltar(indice_pilha, altura_atual)
+            enviar_sequencia(controlador_real, sequencia_soltar)
+
+            altura_caixa = ALTURAS_CAIXAS.get(cor_detectada, 20.0)
+            alturas_das_pilhas[indice_pilha] += altura_caixa
+            print("--> Memoria atualizada. Novas alturas: {}".format(alturas_das_pilhas))
+            
+            print("--> Retornando para a posicao de repouso.")
+            enviar_sequencia(controlador_real, rotinas_gcode.criar_rotina_ir_para_repouso())
+
+            print("\nCiclo completo. Aguardando proximo objeto...")
+            time.sleep(5)
         
-        # Envia o comando, convertendo a string de texto para bytes.
-        controlador_real.write(comando_gcode.encode('utf-8'))
-
-        # Espera pela resposta "ok" do robô.
-        resposta_comando = controlador_real.readline().decode('utf-8').strip()
-        print("[CONTROLADOR REAL] Robo FISICO respondeu: '{}'".format(resposta_comando))
-
-        if 'ok' in resposta_comando:
-            print("SUCESSO! A comunicacao com o hardware real esta funcionando!")
-
-    except Exception as e:
-        print("Ocorreu um erro durante a comunicacao: {}".format(e))
-    
-    finally:
-        # Garante que a conexão seja fechada no final, não importa o que aconteça.
+        if frame is not None:
+             if bbox:
+                 (x, y, w, h) = bbox
+                 cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
+             cv2.imshow('Controlador Principal - Visao do Robo', frame)
+        
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            break
+except Exception as e:
+    print("ERRO CRITICO NO LOOP PRINCIPAL: {}".format(e))
+finally:
+    if cap: 
+        cap.release()
+    cv2.destroyAllWindows()
+    if controlador_real and controlador_real.is_open:
+        enviar_sequencia(controlador_real, rotinas_gcode.criar_rotina_ir_para_repouso())
         controlador_real.close()
-        print("[CONTROLADOR REAL] Conexao com o Robo FISICO fechada.")
-else:
-    print("Nao foi possivel iniciar a logica principal pois o controlador nao esta conectado.")
+        print("Conexao e camera desligadas.")
